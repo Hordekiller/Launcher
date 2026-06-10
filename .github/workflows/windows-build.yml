@@ -25,14 +25,22 @@ jobs:
         run: dotnet restore LauncherShyax.csproj
 
       - name: Build solution
-        run: dotnet build LauncherShyax.csproj --configuration Release --no-restore
+        shell: pwsh
+        run: |
+          dotnet build LauncherShyax.csproj --configuration Release --no-restore 2>&1 | Tee-Object -FilePath build.log
 
       - name: Publish application
-        run: dotnet publish LauncherShyax.csproj --configuration Release --output publish --no-restore
+        if: success()
+        shell: pwsh
+        run: |
+          dotnet publish LauncherShyax.csproj --configuration Release --output publish --no-restore 2>&1 | Tee-Object -FilePath publish.log
 
-      - name: Publish build artifact
+      - name: Publish build artifacts (logs and output)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launcher-release
+          name: launcher-artifacts
           path: |
+            build.log
             publish/**
+            publish.log
