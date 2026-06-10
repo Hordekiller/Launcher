@@ -1,4 +1,4 @@
 namespace LauncherShyax
 {
-    internal sealed record VersionEntry(string FileName, string Name, string DescriptionUri, string DownloadUri);
+    public sealed record VersionEntry(string FileName, string Name, string DescriptionUri, string DownloadUri);
 }

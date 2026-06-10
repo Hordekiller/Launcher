@@ -7,6 +7,8 @@
     <AssemblyName>LauncherShyax</AssemblyName>
     <ApplicationIcon>wow.ico</ApplicationIcon>
     <Nullable>enable</Nullable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>
