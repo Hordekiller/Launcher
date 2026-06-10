@@ -1,5 +1,7 @@
 # LauncherShyax
 
+![Windows Build](https://github.com/Hordekiller/Launcher/actions/workflows/windows-build.yml/badge.svg)
+
 LauncherShyax یک لانچر ساده برای World of Warcraft است که به‌صورت محلی مسیر بازی را پیدا می‌کند، وضعیت سرور را بررسی می‌کند، فایل `realmlist.wtf` را می‌سازد و در صورت نیاز فایل‌های آپدیت را دانلود می‌کند.
 
 ## تغییرات جدید
