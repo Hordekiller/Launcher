@@ -2,38 +2,57 @@
 
 ![Windows Build](https://github.com/Hordekiller/Launcher/actions/workflows/windows-build.yml/badge.svg)
 
-LauncherShyax یک لانچر ساده برای World of Warcraft است که به‌صورت محلی مسیر بازی را پیدا می‌کند، وضعیت سرور را بررسی می‌کند، فایل `realmlist.wtf` را می‌سازد و در صورت نیاز فایل‌های آپدیت را دانلود می‌کند.
+A simple launcher for **World of Warcraft** that locates the game path, checks server status, generates the `realmlist.wtf` file, and downloads update files when needed.
 
-## تغییرات جدید
+---
 
-- پروژه به‌روزرسانی شد تا از `net8.0-windows` به همراه WinForms استفاده کند.
-- کدهای دانلود و ارتباط شبکه به `async/await` و `HttpClient` مهاجرت داده شدند.
-- مسیر بازی از رجیستری ویندوز خوانده می‌شود و فایل‌های `realmlist.wtf` و `Cache` با روش‌های امن‌تر مدیریت می‌شوند.
+## ✨ Features
 
-## پیش‌نیازها
+- 🔍 Automatically locates the game installation path from the **Windows Registry**
+- 🌐 Checks the **server status** before launching
+- 📝 Creates and manages the `realmlist.wtf` file safely
+- ⬇️ Downloads update files when required
+- 🧹 Safer handling of `realmlist.wtf` and `Cache` files
 
-- .NET 8 SDK
-- ویندوز برای ساخت و اجرای برنامه‌ی WinForms
+## 🚀 What's New
 
-## ساخت و اجرا
+- Migrated to **`net8.0-windows`** with **WinForms**
+- Network and download logic rewritten using **`async/await`** and **`HttpClient`**
+- Game path now read directly from the **Windows Registry**
+- Improved, safer handling of `realmlist.wtf` and `Cache`
+
+## 📦 Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **Windows** (required for building and running the WinForms app)
+
+## 🛠️ Build and Run
+
+Build the project:
 
 ```bash
 dotnet build LauncherShyax.csproj
-# سپس در ویندوز:
+```
+
+Run it (on Windows):
+
+```bash
 dotnet run --project LauncherShyax.csproj
 ```
 
-برای تولید خروجی انتشار:
+Produce a release build:
 
 ```bash
 dotnet publish LauncherShyax.csproj --configuration Release --output publish
 ```
 
-## مجوز
+## 📄 License
 
-این پروژه تحت مجوز GNU GPL v3 یا نسخه‌های بعدی منتشر شده است.
+This project is licensed under the **[GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0)** or any later version.
 
-## توجه
+## ⚠️ Note
 
-فایل‌های `bin/` و `obj/` در مخزن ذخیره نمی‌شوند. همچنین برای اجرای کامل برنامه باید ویندوز و دسترسی به مسیر نصب World of Warcraft داشته باشید.
+- The `bin/` and `obj/` folders are **not** tracked in this repository.
+- Full functionality requires **Windows** and access to the **World of Warcraft installation path**.
+
 <!-- CI trigger: 2026-06-10T15:56:47Z -->
