@@ -1,9 +1,39 @@
-obj
-*.suo
+# Build artifacts
+bin/
+obj/
+publish/
+
+# Visual Studio
+.vs/
 *.user
+*.suo
+*.userosscache
+*.sln.docstates
 *.cache
-*_ReSharper.*
-*.vs10x
+*.log
+
+# OS files
+*.DS_Store
+*.Thumbs.db
+
+# JetBrains Rider
+.idea/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+
+# Dotnet
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# temporary files
+*.tmp
 *.bak
-Run/Debug/*
-Run/Release/*
+*.swp

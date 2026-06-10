@@ -19,20 +19,18 @@
 
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.IO;
-using System.Drawing;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Xml;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace LauncherShyax
 {
     public partial class DownloaderBox : Form
     {
+        private static readonly HttpClient HttpClient = new HttpClient();
+
         public DownloaderBox()
         {
             InitializeComponent();
@@ -40,57 +38,79 @@ namespace LauncherShyax
 
         private void DownloaderBox_Load(object sender, EventArgs e)
         {
-
         }
 
-        /// <summary>
-        /// Download the MPQ Files which are in nodeList and not in mpqFiles
-        /// </summary>
-        /// <param name="nodeList">Node List existing in version.xml</param>
-        /// <param name="mpqFiles">MPQ Files existing in Data/ directory</param>
-        /// <param name="dataDir">Absolute path to Data/ directory</param>
-        public void Download(XmlNodeList nodeList, FileInfo[] mpqFiles, string dataDir)
+        public async Task DownloadAsync(IEnumerable<VersionEntry> versionEntries, IEnumerable<string> mpqFiles, string dataDir)
         {
-            DialogResult result = MessageBox.Show("Une nouvelle mise à jour a été trouvée !\r\n Télécharger ?", "Avertissement", MessageBoxButtons.OKCancel);
+            var missingEntries = versionEntries
+                .Where(entry => !mpqFiles
+                    .Select(Path.GetFileName)
+                    .Contains(entry.FileName, StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            if (!missingEntries.Any())
+            {
+                Close();
+                return;
+            }
+
+            var result = MessageBox.Show("Une nouvelle mise à jour a été trouvée !\r\n Télécharger ?", "Avertissement", MessageBoxButtons.OKCancel);
             if (result == DialogResult.Cancel)
             {
                 Close();
+                return;
             }
-            else
+
+            foreach (var entry in missingEntries)
             {
-                foreach (XmlNode node in nodeList)
+                labelDl.Text = "Téléchargement de la mise à jour : " + entry.Name;
+                if (!string.IsNullOrWhiteSpace(entry.DescriptionUri))
                 {
-                    if (!mpqFiles.Contains(new FileInfo(node.InnerText)))
+                    try
                     {
-                        // Have to create two WebClient
-                        WebClient webClient = new WebClient();
-                        WebClient webClient2 = new WebClient();
-                        labelDl.Text = "Téléchargement de la mise à jour : " + node.Attributes["nom"].Value;
-                        webClient.DownloadProgressChanged += new DownloadProgressChangedEventHandler(webClient_DownloadProgressChanged);
-                        webClient2.DownloadStringCompleted += new DownloadStringCompletedEventHandler(webClient2_DownloadStringCompleted);
-                        webClient2.DownloadStringAsync(new Uri(node.Attributes["desc"].Value));
-                        webClient.DownloadFileAsync(new Uri(node.Attributes["lien"].Value), Path.Combine(dataDir, node.InnerText));
+                        labelMaj.Text = await HttpClient.GetStringAsync(entry.DescriptionUri);
+                    }
+                    catch
+                    {
+                        labelMaj.Text = string.Empty;
                     }
                 }
-                buttonClose.Visible = true;
+
+                var outputPath = Path.Combine(dataDir, entry.FileName);
+                await DownloadFileWithProgressAsync(entry.DownloadUri, outputPath, new Progress<int>(value => progressBarDl.Value = value));
             }
+
+            buttonClose.Visible = true;
         }
 
-        #region Events
-        void webClient2_DownloadStringCompleted(object sender, DownloadStringCompletedEventArgs e)
+        private static async Task DownloadFileWithProgressAsync(string sourceUrl, string destinationPath, IProgress<int> progress)
         {
-            labelMaj.Text = e.Result;
-        }
-       
-        void webClient_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e)
-        {
-            progressBarDl.Value = (int)(e.BytesReceived*100/e.TotalBytesToReceive);
+            using var response = await HttpClient.GetAsync(sourceUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength ?? -1L;
+            await using var contentStream = await response.Content.ReadAsStreamAsync();
+            await using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+
+            var buffer = new byte[8192];
+            long totalRead = 0;
+            int bytesRead;
+            while ((bytesRead = await contentStream.ReadAsync(buffer.AsMemory(0, buffer.Length))) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                totalRead += bytesRead;
+                if (totalBytes > 0)
+                {
+                    progress.Report((int)(totalRead * 100 / totalBytes));
+                }
+            }
+
+            progress.Report(100);
         }
 
         private void buttonClose_Click(object sender, EventArgs e)
         {
             Close();
         }
-        #endregion
     }
 }

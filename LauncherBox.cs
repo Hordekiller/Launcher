@@ -1,4 +1,4 @@
-﻿/* 
+/* 
  * LauncherShyax, un launcher pour World Of Warcraft avec téléchargement de mise à jour
   Copyright (C) 2011 Shyax — Tous droits réservés.
   
@@ -18,63 +18,44 @@
  * */
 
 using System;
-using System.Collections.Generic;
 using System.Configuration;
-using System.ComponentModel;
-using System.Data;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
-using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml;
+using System.Xml.Linq;
 using Microsoft.Win32;
 
 namespace LauncherShyax
 {
     public partial class Launcher : Form
     {
+        private static readonly HttpClient HttpClient = new HttpClient();
+
         #region Variables
         public bool isAllowedToDeleteCache
         {
-            get { return Configuration.Default.IsAllowedToDeleteCache; }
-            set { Configuration.Default.IsAllowedToDeleteCache = value; }
+            get => Configuration.Default.IsAllowedToDeleteCache;
+            set => Configuration.Default.IsAllowedToDeleteCache = value;
         }
-        public string hostAddress
-        {
-            get { return Configuration.Default.HostAddress; }
-        }
-        public string siteAddress
-        {
-            get { return Configuration.Default.SiteAddress; }
-        }
-        public string forumAddress
-        {
-            get { return Configuration.Default.ForumAddress; }
-        }
-        public string bugTrackerAddress
-        {
-            get { return Configuration.Default.BugTrackerAddress; }
-        }
-        public int realmPort
-        {
-            get { return Convert.ToInt32(Configuration.Default.RealmServerPort); }
-        }
-        public int worldPort
-        {
-            get { return Convert.ToInt32(Configuration.Default.WorldServerPort); }
-        }
+
+        public string hostAddress => Configuration.Default.HostAddress;
+        public string siteAddress => Configuration.Default.SiteAddress;
+        public string forumAddress => Configuration.Default.ForumAddress;
+        public string bugTrackerAddress => Configuration.Default.BugTrackerAddress;
+        public int realmPort => Configuration.Default.RealmServerPort;
+        public int worldPort => Configuration.Default.WorldServerPort;
 
         public string _wowDir
         {
-            get { return Configuration.Default.WoWDirectory; }
-            set 
-            { 
-                Configuration.Default.WoWDirectory = value;
-            }
+            get => Configuration.Default.WoWDirectory;
+            set => Configuration.Default.WoWDirectory = value;
         }
         #endregion
 
@@ -83,154 +64,184 @@ namespace LauncherShyax
             InitializeComponent();
         }
 
-        private void LauncherBox_Load(object sender, EventArgs e)
+        private async void LauncherBox_Load(object sender, EventArgs e)
         {
             FindWoWDir();
-            VerifyVersion();
-            VerifyStatus();
+            await VerifyVersionAsync();
+            await VerifyStatusAsync();
             ChangeRealmlist();
             AddLinks();
             checkBoxCache.Checked = Configuration.Default.IsAllowedToDeleteCache;
         }
 
-        /// <summary>
-        /// Find the game's directory locally (in the directory of the launcher) then in the registry
-        /// </summary>
         private void FindWoWDir()
         {
             const string wowExe = "Wow.exe";
-            FileInfo wowInfo = new FileInfo(Path.Combine(_wowDir, wowExe));
-            if (wowInfo.Exists)
+            if (!string.IsNullOrWhiteSpace(_wowDir) && File.Exists(Path.Combine(_wowDir, wowExe)))
             {
                 return;
             }
-            else
+
+            var localPath = Path.GetDirectoryName(AppContext.BaseDirectory) ?? Environment.CurrentDirectory;
+            if (File.Exists(Path.Combine(localPath, wowExe)))
             {
-                // Look Locally before in registry
-                _wowDir = Path.GetFullPath(System.Reflection.Assembly.GetExecutingAssembly().Location);
-                FileInfo wowInfo2 = new FileInfo(Path.Combine(_wowDir, wowExe));
-                if (wowInfo2.Exists)
-                {
-                    return;
-                }
-                else
-                {
-                    // Look In Registry
-                    RegistryKey key = Registry.LocalMachine.OpenSubKey("SOFTWARE");
-                    if (key == null)
-                    {
-                        MessageBox.Show("World Of Warcraft non trouvé. Raison : Clé SOFTWARE");
-                        return;
-                    }
-                    if (Environment.Is64BitProcess)
-                    {
-                        key = key.OpenSubKey("Wow6432Node");
-                        if (key == null)
-                        {
-                            MessageBox.Show("World Of Warcraft non trouvé. Raison : Clé Wow6432Node");
-                            return;
-                        }
-                    }
-                    key = key.OpenSubKey("Blizzard Entertainment");
-                    if (key == null)
-                    {
-                        MessageBox.Show("World Of Warcraft non trouvé. Raison : Clé Blizzard Entertainment");
-                        return;
-                    }
-                    key = key.OpenSubKey("World of Warcraft");
-                    if (key == null)
-                    {
-                        MessageBox.Show("World Of Warcraft non trouvé. Raison : Clé World of Warcraft");
-                        return;
-                    }
-                    _wowDir = key.GetValue("InstallPath").ToString();
-                    key.Close();
-                }
+                _wowDir = localPath;
+                return;
             }
+
+            var installPath = ReadWoWInstallPathFromRegistry();
+            if (!string.IsNullOrWhiteSpace(installPath) && File.Exists(Path.Combine(installPath, wowExe)))
+            {
+                _wowDir = installPath;
+                return;
+            }
+
+            MessageBox.Show("World Of Warcraft non trouvé.");
         }
 
-        /// <summary>
-        /// Verify if we have the latest version of the server using version.xml
-        /// If the file of the latest is not found, DownloaderBox is launched
-        /// </summary>
-        private void VerifyVersion()
+        private string? ReadWoWInstallPathFromRegistry()
         {
-            XmlDocument xmlDoc = new XmlDocument();
-            try
+            const string wowRegistryPath = @"SOFTWARE\Blizzard Entertainment\World of Warcraft";
+            using var baseKey = Registry.LocalMachine.OpenSubKey(wowRegistryPath);
+            if (baseKey is not null)
             {
-                xmlDoc.Load("http://"+ hostAddress + "/version.xml");
+                return baseKey.GetValue("InstallPath")?.ToString();
             }
-            catch (Exception e)
+
+            if (!Environment.Is64BitOperatingSystem)
             {
-                MessageBox.Show("XML de MAJ non trouvé !");
+                return null;
+            }
+
+            const string wow64RegistryPath = @"SOFTWARE\Wow6432Node\Blizzard Entertainment\World of Warcraft";
+            using var wow64Key = Registry.LocalMachine.OpenSubKey(wow64RegistryPath);
+            return wow64Key?.GetValue("InstallPath")?.ToString();
+        }
+
+        private async Task VerifyVersionAsync()
+        {
+            if (string.IsNullOrWhiteSpace(_wowDir))
+            {
                 return;
             }
+
+            var versionUrl = new Uri($"http://{hostAddress}/version.xml");
+            XDocument xmlDoc;
+            try
+            {
+                var xmlContent = await HttpClient.GetStringAsync(versionUrl);
+                xmlDoc = XDocument.Parse(xmlContent);
+            }
+            catch
+            {
+                MessageBox.Show("XML de MAJ non trouvé ou invalide !");
+                return;
+            }
+
             const string dataDir = "Data";
-            DirectoryInfo mpqInfo = new DirectoryInfo(Path.Combine(_wowDir, dataDir));
-            FileInfo[] mpqFiles = mpqInfo.GetFiles("patch-*.mpq", SearchOption.TopDirectoryOnly);
+            var dataPath = Path.Combine(_wowDir, dataDir);
+            var existingFiles = Directory.Exists(dataPath)
+                ? Directory.GetFiles(dataPath, "patch-*.mpq", SearchOption.TopDirectoryOnly)
+                : Array.Empty<string>();
 
-            XmlNodeList nodeList = xmlDoc.GetElementsByTagName("version");
-            XmlNode lastNode = nodeList[0];
-            FileInfo lastNodeInfo = new FileInfo(lastNode.InnerText);
-            try
+            var versions = xmlDoc.Descendants("version")
+                .Select(node => new VersionEntry(
+                    node.Value.Trim(),
+                    node.Attribute("nom")?.Value ?? node.Value.Trim(),
+                    node.Attribute("desc")?.Value ?? string.Empty,
+                    node.Attribute("lien")?.Value ?? string.Empty))
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.FileName))
+                .ToList();
+
+            if (!versions.Any())
             {
-                FileInfo contains = mpqFiles.First(fileInfo => fileInfo.Name == lastNode.InnerText);
+                return;
             }
-            catch (Exception e)
+
+            var missingEntry = versions
+                .FirstOrDefault(entry => !existingFiles
+                    .Select(Path.GetFileName)
+                    .Contains(entry.FileName, StringComparer.OrdinalIgnoreCase));
+
+            if (missingEntry is null)
             {
-                DownloaderBox dlBox = new DownloaderBox();
-                dlBox.Show(this);
-                dlBox.Download(nodeList, mpqFiles, Path.Combine(_wowDir, dataDir));
+                return;
             }
+
+            using var dlBox = new DownloaderBox();
+            dlBox.Show(this);
+            await dlBox.DownloadAsync(versions, existingFiles, dataPath);
         }
 
-        /// <summary>
-        /// Verify the status of the realm server and the world server using worldPort, realmPort and ipAddress
-        /// </summary>
-        private void VerifyStatus()
+        private async Task VerifyStatusAsync()
         {
-            IPAddress[] address = Dns.GetHostAddresses(hostAddress);
+            if (string.IsNullOrWhiteSpace(hostAddress))
+            {
+                return;
+            }
 
-            Socket s = new Socket(AddressFamily.InterNetwork,
-                SocketType.Stream,
-                ProtocolType.Tcp);
+            IPAddress[] addresses;
             try
             {
-                s.Connect(address[0], realmPort);
+                addresses = await Dns.GetHostAddressesAsync(hostAddress);
             }
-            catch (Exception e)
+            catch
             {
-                pictureBoxRealm.Image = LauncherShyax.Properties.Resources.down;
+                SetServerStatus(false, pictureBoxRealm);
+                SetServerStatus(false, pictureBoxWorld);
+                return;
             }
-            pictureBoxRealm.Visible = true;
-            try
+
+            if (addresses.Length == 0)
             {
-                s.Connect(address[0], worldPort);
+                SetServerStatus(false, pictureBoxRealm);
+                SetServerStatus(false, pictureBoxWorld);
+                return;
             }
-            catch (Exception e)
-            {
-                pictureBoxWorld.Image = LauncherShyax.Properties.Resources.down;
-            }
-            pictureBoxWorld.Visible = true;
+
+            await CheckServerPortAsync(addresses[0], realmPort, pictureBoxRealm);
+            await CheckServerPortAsync(addresses[0], worldPort, pictureBoxWorld);
         }
 
-        /// <summary>
-        /// Create a new realmlist.wtf
-        /// </summary>
+        private async Task CheckServerPortAsync(IPAddress address, int port, PictureBox pictureBox)
+        {
+            try
+            {
+                using var tcpClient = new TcpClient();
+                var connectTask = tcpClient.ConnectAsync(address, port);
+                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(3));
+                var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+
+                SetServerStatus(completedTask == connectTask && tcpClient.Connected, pictureBox);
+            }
+            catch
+            {
+                SetServerStatus(false, pictureBox);
+            }
+        }
+
+        private static void SetServerStatus(bool isOnline, PictureBox pictureBox)
+        {
+            pictureBox.Image = isOnline
+                ? LauncherShyax.Properties.Resources.up
+                : LauncherShyax.Properties.Resources.down;
+            pictureBox.Visible = true;
+        }
+
         private void ChangeRealmlist()
         {
             const string dataDir = "Data";
             const string localeDir = "frFR";
             const string realmFile = "realmlist.wtf";
-            FileInfo realmList = new FileInfo(Path.Combine(_wowDir, dataDir, localeDir, realmFile));
-            if (realmList != null)
+
+            var realmPath = Path.Combine(_wowDir, dataDir, localeDir, realmFile);
+            var realmDirectory = Path.GetDirectoryName(realmPath);
+            if (!string.IsNullOrEmpty(realmDirectory))
             {
-                realmList.Delete();
+                Directory.CreateDirectory(realmDirectory);
             }
-            FileStream stream = realmList.Create();
-            byte[] bytes = Encoding.UTF8.GetBytes(("set realmlist " + hostAddress + ":" + worldPort));
-            stream.Write(bytes, 0, bytes.Length);
-            stream.Dispose();
+
+            File.WriteAllText(realmPath, $"set realmlist {hostAddress}:{worldPort}", Encoding.UTF8);
         }
 
         private void AddLinks()
@@ -240,27 +251,31 @@ namespace LauncherShyax
             linkLabelBugTracker.Links.Add(0, linkLabelBugTracker.Text.Length, bugTrackerAddress);
         }
 
-        /// <summary>
-        /// Delete the Cache/ directory
-        /// Call only when isAllowedToDeleteCache is true !
-        /// </summary>
         private void DeleteCache()
         {
             const string cacheDir = "Cache";
-            DirectoryInfo cacheInfo = new DirectoryInfo(Path.Combine(_wowDir, cacheDir));
-            if (cacheInfo.Exists)
-                cacheInfo.Delete(true);
+            var cachePath = Path.Combine(_wowDir, cacheDir);
+            if (Directory.Exists(cachePath))
+            {
+                Directory.Delete(cachePath, true);
+            }
         }
 
-        /// <summary>
-        /// Launch the game and close the launcher
-        /// </summary>
         private void LaunchGame()
         {
             const string wowExe = "Wow.exe";
-            ProcessStartInfo wowStartInfo = new ProcessStartInfo(Path.Combine(_wowDir, wowExe));
-            Process.Start(wowStartInfo);
+            var wowPath = Path.Combine(_wowDir, wowExe);
+            if (!File.Exists(wowPath))
+            {
+                MessageBox.Show("Le jeu World of Warcraft est introuvable.");
+                return;
+            }
 
+            var wowStartInfo = new ProcessStartInfo(wowPath)
+            {
+                UseShellExecute = true
+            };
+            Process.Start(wowStartInfo);
             Close();
         }
 
@@ -270,7 +285,9 @@ namespace LauncherShyax
             Configuration.Default.IsAllowedToDeleteCache = checkBoxCache.Checked;
             Configuration.Default.Save();
             if (checkBoxCache.Checked)
+            {
                 DeleteCache();
+            }
 
             LaunchGame();
         }
@@ -282,26 +299,26 @@ namespace LauncherShyax
 
         private void pictureBoxHelp_Click(object sender, EventArgs e)
         {
-            HelpBox box = new HelpBox();
+            using var box = new HelpBox();
             box.ShowDialog();
         }
 
         private void linkLabelSite_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             linkLabelSite.LinkVisited = true;
-            Process.Start(siteAddress);
+            Process.Start(new ProcessStartInfo(siteAddress) { UseShellExecute = true });
         }
 
         private void linkLabelForum_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             linkLabelForum.LinkVisited = true;
-            Process.Start(forumAddress);
+            Process.Start(new ProcessStartInfo(forumAddress) { UseShellExecute = true });
         }
 
         private void linkLabelBugTracker_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             linkLabelBugTracker.LinkVisited = true;
-            Process.Start(bugTrackerAddress);
+            Process.Start(new ProcessStartInfo(bugTrackerAddress) { UseShellExecute = true });
         }
         #endregion
     }
