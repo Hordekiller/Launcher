@@ -27,10 +27,12 @@ jobs:
       - name: Build solution
         run: dotnet build LauncherShyax.csproj --configuration Release --no-restore
 
+      - name: Publish application
+        run: dotnet publish LauncherShyax.csproj --configuration Release --output publish --no-restore
+
       - name: Publish build artifact
         uses: actions/upload-artifact@v4
         with:
           name: launcher-release
           path: |
-            bin/Release/**
-            LauncherShyax.csproj
+            publish/**

@@ -23,6 +23,12 @@ dotnet build LauncherShyax.csproj
 dotnet run --project LauncherShyax.csproj
 ```
 
+برای تولید خروجی انتشار:
+
+```bash
+dotnet publish LauncherShyax.csproj --configuration Release --output publish
+```
+
 ## مجوز
 
 این پروژه تحت مجوز GNU GPL v3 یا نسخه‌های بعدی منتشر شده است.
