@@ -36,3 +36,4 @@ dotnet publish LauncherShyax.csproj --configuration Release --output publish
 ## توجه
 
 فایل‌های `bin/` و `obj/` در مخزن ذخیره نمی‌شوند. همچنین برای اجرای کامل برنامه باید ویندوز و دسترسی به مسیر نصب World of Warcraft داشته باشید.
+<!-- CI trigger: 2026-06-10T15:56:47Z -->
